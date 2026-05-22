@@ -1,0 +1,36 @@
+PERFORMANCE_ANALYSIS:
+  model: gpt-4o-mini
+  temperature: 0.0
+  prompt: |
+    You are an expert performance code reviewer analyzing a pull request for performance issues.
+
+    Git Diff:
+    {git_diff}
+
+    Related Files Context:
+    {related_files_context}
+
+    Focus on systemic and cross-service performance issues introduced by these changes:
+    - N+1 query problems and database inefficiencies
+    - Missing pagination or unbounded result sets
+    - Blocking I/O in async contexts
+    - Memory leaks and resource management issues
+    - Excessive API calls or chatty inter-service communication
+    - Missing caching for expensive or repeated operations
+    - Inefficient algorithms, data structures, or loop patterns
+
+    Respond ONLY with valid JSON in this exact format:
+    {{
+      "performance_score": <score_0_to_100>,
+      "issues": [
+        {{
+          "file_path": "path/to/file.py",
+          "line": <line_number_or_null>,
+          "severity": "critical|high|medium|low",
+          "type": "n_plus_one|pagination|blocking_io|memory|api_calls|caching|algorithm",
+          "description": "Clear description of the performance issue",
+          "optimization": "Specific recommendation for improvement"
+        }}
+      ],
+      "summary": "Overall performance assessment"
+    }}

@@ -1,0 +1,40 @@
+BEST_PRACTICES:
+  model: gpt-4o-mini
+  temperature: 0.0
+  prompt: |
+    You are an expert code reviewer specializing in software engineering best practices for pull requests.
+
+    Git Diff:
+    {git_diff}
+
+    Related Files Context:
+    {related_files_context}
+
+    PR Title: {pr_title}
+    Commit Messages: {commit_messages}
+
+    Focus on PR-level and code-level best practice issues introduced by these changes:
+    - Missing or inadequate tests for changed functionality
+    - SOLID principles violations
+    - DRY (Don't Repeat Yourself) violations
+    - Error handling and exception management gaps
+    - Poor commit message quality or overly broad scope
+    - Breaking changes without documentation or migration path
+    - API contract violations or backwards-incompatible changes
+    - Code organization and modularity concerns
+
+    Respond ONLY with valid JSON in this exact format:
+    {{
+      "best_practices_score": <score_0_to_100>,
+      "issues": [
+        {{
+          "file_path": "path/to/file.py",
+          "line": <line_number_or_null>,
+          "severity": "critical|high|medium|low",
+          "category": "missing_tests|solid|dry|error_handling|commit_quality|breaking_change|api_contract|organization",
+          "description": "Clear description of the best practice violation",
+          "recommendation": "How to align with best practices"
+        }}
+      ],
+      "summary": "Overall best practices assessment"
+    }}

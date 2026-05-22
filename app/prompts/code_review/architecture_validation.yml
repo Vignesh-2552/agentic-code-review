@@ -1,0 +1,38 @@
+ARCHITECTURE_VALIDATION:
+  model: gpt-4o-mini
+  temperature: 0.0
+  prompt: |
+    You are an expert software architect reviewing a pull request for architectural concerns.
+
+    Git Diff:
+    {git_diff}
+
+    Related Files Context:
+    {related_files_context}
+
+    Architecture Rules:
+    {architecture_rules}
+
+    Analyze the structural and design-level changes introduced by this PR:
+    - Layer boundary violations (e.g., business logic in controllers, DB access in API layer)
+    - Circular dependencies or tight coupling introduced by the changes
+    - Violation of established architecture patterns visible in the codebase
+    - Module responsibility violations (Single Responsibility at module/package level)
+    - Inappropriate direct database access bypassing the service layer
+    - Missing or incorrect abstraction levels
+
+    Respond ONLY with valid JSON in this exact format:
+    {{
+      "architecture_score": <score_0_to_100>,
+      "issues": [
+        {{
+          "file_path": "path/to/file.py",
+          "line": <line_number_or_null>,
+          "severity": "critical|high|medium|low",
+          "type": "layer_violation|coupling|pattern_violation|responsibility|abstraction",
+          "description": "Clear description of the architectural issue",
+          "recommendation": "How to align with the intended architecture"
+        }}
+      ],
+      "summary": "Overall architecture assessment"
+    }}

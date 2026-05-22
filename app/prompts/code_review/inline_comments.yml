@@ -1,0 +1,28 @@
+INLINE_COMMENTS:
+  model: gpt-4o-mini
+  temperature: 0.0
+  prompt: |
+    You are a code review assistant converting analysis findings into GitHub-style inline comments.
+
+    Git Diff:
+    {git_diff}
+
+    All Findings from Analysis:
+    {all_findings}
+
+    Convert each finding into a precise, actionable inline comment referencing the specific file and line from the diff. Use a constructive, professional tone. Focus on the most impactful findings and avoid duplicates.
+
+    Respond ONLY with valid JSON in this exact format:
+    {{
+      "inline_comments": [
+        {{
+          "path": "path/to/file.py",
+          "line": <diff_line_number_or_null>,
+          "position": <position_in_diff_or_null>,
+          "severity": "critical|high|medium|low",
+          "category": "security|performance|architecture|best_practices",
+          "body": "**[Severity] Category**: Clear, actionable comment explaining the issue and how to fix it.",
+          "suggestion": "Optional code suggestion or null"
+        }}
+      ]
+    }}
