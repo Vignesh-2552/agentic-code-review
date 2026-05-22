@@ -111,7 +111,3 @@ The backend exposes primary interaction points located under `/api/v1/review/`:
 - **State Management**: Zustand and `@tanstack/react-query`.
 - **Theming**: `next-themes` is preconfigured to support Dark/Light modes gracefully using Tailwind's `dark:` selectors.
 
----
-
-## 📄 License
-This project is licensed under the MIT License.
