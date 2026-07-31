@@ -2,9 +2,9 @@ import json
 
 from loguru import logger
 
-from app.models.types import PRReviewState
 from app.core.llm_service import LLMService
 from app.core.prompt_service import PromptService
+from app.models.types import PRReviewState
 
 
 class GenerateInlineCommentsNode:

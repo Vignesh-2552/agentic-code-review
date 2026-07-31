@@ -19,18 +19,11 @@ class Container(containers.DeclarativeContainer):
 
     prompt_service = providers.Singleton(PromptService)
 
-
-
-
     code_review_graph = providers.Singleton(
         CodeReviewGraph,
         llm_service=llm_service,
         prompt_service=prompt_service,
     )
-
-
-
-
 
     # Code Review Service
     code_review_service = providers.Factory(CodeReviewService,

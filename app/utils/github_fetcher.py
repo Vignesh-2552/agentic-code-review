@@ -11,12 +11,21 @@ _EXTENSION_MAP = {
 }
 
 
+_ALLOWED_NETLOCS = {"raw.githubusercontent.com", "github.com"}
+
+
 def normalize_to_raw_url(url: str) -> str:
-    """Convert any GitHub file URL to raw.githubusercontent.com."""
+    """Convert a github.com file URL to raw.githubusercontent.com.
+
+    Only github.com and raw.githubusercontent.com URLs are accepted; anything
+    else is rejected outright so callers can't use this as an open fetch proxy.
+    """
     parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.netloc not in _ALLOWED_NETLOCS:
+        raise ValueError(
+            "Only https://github.com or https://raw.githubusercontent.com URLs are supported"
+        )
     if parsed.netloc == "raw.githubusercontent.com":
-        return url
-    if parsed.netloc != "github.com":
         return url
 
     # Strip leading slash and split path
@@ -27,7 +36,7 @@ def normalize_to_raw_url(url: str) -> str:
         file_path = "/".join(parts[4:])
         return f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{file_path}"
 
-    return url
+    raise ValueError("URL must point to a specific file (e.g. .../blob/<branch>/<path>)")
 
 
 def detect_language_from_url(url: str) -> tuple[str, str]:

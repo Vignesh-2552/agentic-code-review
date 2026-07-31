@@ -1,13 +1,11 @@
 import uvicorn
-
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from app.api.routers import review
+from app.api.routers import github, review
 from app.config.container import Container
 from app.config.settings import settings
-
 
 # Initialize dependency injection container
 container = Container()
@@ -32,6 +30,7 @@ app.add_middleware(CORSMiddleware,
 )
 
 app.include_router(review.router, prefix="/api/v1/review", tags=["Code Review"])
+app.include_router(github.router, prefix="/api/v1/review/github", tags=["GitHub"])
 
 @app.get("/health")
 async def health_check(request: Request):

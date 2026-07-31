@@ -34,7 +34,19 @@ class Settings:
     def MODEL(self):
         return os.getenv("MODEL")
 
+    # OpenRouter Configuration — when OPENROUTER_API_KEY is set, LLMService routes
+    # through OpenRouter's OpenAI-compatible endpoint instead of OpenAI directly.
+    # Model catalog (including free ":free" models): https://openrouter.ai/models
+    @property
+    def OPENROUTER_API_KEY(self):
+        return os.getenv("OPENROUTER_API_KEY")
 
+    @property
+    def OPENROUTER_MODEL(self):
+        # Must be a model id from https://openrouter.ai/api/v1/models ending in
+        # ":free" (verified live, not from static docs — OpenRouter's free
+        # catalog rotates). Override via OPENROUTER_MODEL if you want a different one.
+        return os.getenv("OPENROUTER_MODEL") or "openai/gpt-oss-20b:free"
 
     # Code Review Settings
     MAX_CODE_LENGTH = 50000
@@ -47,8 +59,17 @@ class Settings:
         return os.getenv("GITHUB_TOKEN")
 
     # CORS Settings
-    CORS_ORIGINS = ["*"]  # Configure appropriately for production
-    CORS_CREDENTIALS = True
+    # Wildcard origins + credentials is rejected by browsers (and insecure where it
+    # isn't); the API doesn't use cookies/sessions, so credentials stay off and
+    # origins are an explicit allowlist, overridable via ALLOWED_ORIGINS.
+    @property
+    def CORS_ORIGINS(self):
+        origins = os.getenv("ALLOWED_ORIGINS")
+        if origins:
+            return [o.strip() for o in origins.split(",") if o.strip()]
+        return ["http://localhost:3000"]
+
+    CORS_CREDENTIALS = False
     CORS_METHODS = ["*"]
     CORS_HEADERS = ["*"]
 
@@ -67,10 +88,11 @@ class Settings:
         instance = cls() if not hasattr(cls, '_instance') else cls._instance
         missing_vars = []
 
-        if not instance.OPENAI_API_KEY:
-            missing_vars.append("OPENAI_API_KEY")
-        if not instance.MODEL:
-            missing_vars.append("MODEL")
+        if not instance.OPENROUTER_API_KEY:
+            if not instance.OPENAI_API_KEY:
+                missing_vars.append("OPENAI_API_KEY (or set OPENROUTER_API_KEY)")
+            if not instance.MODEL:
+                missing_vars.append("MODEL (or set OPENROUTER_API_KEY)")
 
         if missing_vars:
             raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")

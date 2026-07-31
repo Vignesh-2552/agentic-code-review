@@ -1,11 +1,20 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import ReviewInputForm from '@/components/forms/ReviewInputForm';
 import AnalysisSummaryPanel from '@/components/review/AnalysisSummaryPanel';
-import CardDisplay from '@/components/review/CardDisplay';
+import CodeDiffViewer from '@/components/review/CodeDiffViewer';
+import CollapsibleInput, { useCollapsibleInput } from '@/components/review/CollapsibleInput';
+import EmptyReviewState from '@/components/review/EmptyReviewState';
+import FindingsList, {
+  flattenFindings,
+  type CategorizedFinding,
+} from '@/components/review/FindingsList';
 import NodeExecutionPanel from '@/components/review/NodeExecutionPanel';
-import { Separator } from '@/components/ui/separator';
+import ReviewWorkspace from '@/components/review/ReviewWorkspace';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useStreamPRReview } from '@/lib/api';
+import { useReviewStore } from '@/store/reviewStore';
 
 export default function PRReviewPage() {
   const {
@@ -20,112 +29,158 @@ export default function PRReviewPage() {
     totalElapsedMs,
   } = useStreamPRReview();
 
-  const inlineComments = data?.inline_comments ?? partialFindings.inline_comments;
+  const { collapsed, toggle, collapse } = useCollapsibleInput(false);
+  const findingFilter = useReviewStore((s) => s.findingFilter);
+  const setFindingFilter = useReviewStore((s) => s.setFindingFilter);
+  const [submittedDiff, setSubmittedDiff] = useState('');
+  const [highlightLine, setHighlightLine] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState('findings');
+
+  useEffect(() => {
+    setFindingFilter('all');
+  }, [setFindingFilter]);
+
+  const inlineComments = data?.inline_comments ?? partialFindings.inline_comments ?? [];
   const severityLevel = data?.severity_level ?? partialFindings.severity_level ?? null;
-  const requiresHumanReview = data?.requires_human_review ?? partialFindings.requires_human_review ?? false;
+  const requiresHumanReview =
+    data?.requires_human_review ?? partialFindings.requires_human_review ?? false;
   const findingsCount = data?.findings_count ?? {
-    total: 0, architecture: 0, security: 0, performance: 0, best_practices: 0,
+    total:
+      (partialFindings.architecture_issues?.length ?? 0) +
+      (partialFindings.security_vulnerabilities?.length ?? 0) +
+      (partialFindings.performance_issues?.length ?? 0) +
+      (partialFindings.best_practice_violations?.length ?? 0),
+    architecture: partialFindings.architecture_issues?.length ?? 0,
+    security: partialFindings.security_vulnerabilities?.length ?? 0,
+    performance: partialFindings.performance_issues?.length ?? 0,
+    best_practices: partialFindings.best_practice_violations?.length ?? 0,
+  };
+
+  const findings = useMemo(
+    () =>
+      flattenFindings({
+        architecture: partialFindings.architecture_issues,
+        security: partialFindings.security_vulnerabilities,
+        performance: partialFindings.performance_issues,
+        best_practices: partialFindings.best_practice_violations,
+      }),
+    [partialFindings],
+  );
+
+  const showWorkspace = isPending || isSuccess;
+
+  const handleLocate = (finding: CategorizedFinding) => {
+    const line =
+      typeof finding.line === 'number'
+        ? finding.line
+        : typeof finding.line_number === 'number'
+          ? finding.line_number
+          : null;
+    setHighlightLine(line);
+    setActiveTab('diff');
+    requestAnimationFrame(() => {
+      document.getElementById('diff-viewer')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold mb-1">Pull Request Review</h1>
-        <p className="text-muted-foreground text-sm">
-          Paste your git diff and PR details to get a comprehensive review with inline comments.
+        <h1 className="text-xl font-semibold tracking-tight">Pull Request Review</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Paste your git diff and PR details for a streamed review with inline comments.
         </p>
       </div>
 
-      <ReviewInputForm mode="pr" mutation={{ mutate, isPending, error }} hideLoadingState />
+      <CollapsibleInput
+        title="Review input"
+        description="PR title, git diff, optional description"
+        collapsed={collapsed && showWorkspace}
+        onToggle={toggle}
+      >
+        <ReviewInputForm
+          mode="pr"
+          mutation={{ mutate, isPending, error }}
+          hideLoadingState
+          compact
+          onDiffSubmit={setSubmittedDiff}
+          onSubmitStart={() => {
+            collapse();
+            setFindingFilter('all');
+            setActiveTab('findings');
+          }}
+        />
+      </CollapsibleInput>
 
-      {(isPending || isSuccess) && (
-        <NodeExecutionPanel
-          nodeStatuses={nodeStatuses}
-          nodeTimings={nodeTimings}
-          totalElapsedMs={totalElapsedMs}
-          isComplete={isSuccess}
+      {!showWorkspace && (
+        <EmptyReviewState
+          title="Ready to review a PR"
+          description="Paste a unified git diff to run the agent pipeline. Scorecards update live; open Diff to inspect inline comments."
+          example="diff --git a/main.py b/main.py ..."
         />
       )}
 
-      {(isPending || isSuccess) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <CardDisplay
-            title="Security Issues"
-            items={partialFindings.security_vulnerabilities}
-            colorClass="text-red-600 dark:text-red-400"
-          />
-          <CardDisplay
-            title="Performance Issues"
-            items={partialFindings.performance_issues}
-            colorClass="text-yellow-600 dark:text-yellow-400"
-          />
-          <CardDisplay
-            title="Architecture Issues"
-            items={partialFindings.architecture_issues}
-            colorClass="text-blue-600 dark:text-blue-400"
-          />
-          <CardDisplay
-            title="Best Practices"
-            items={partialFindings.best_practice_violations}
-            colorClass="text-green-600 dark:text-green-400"
-          />
-        </div>
-      )}
-
-      {isSuccess && data && (
-        <>
-          <Separator />
-
-          {data.pr_summary?.summary_text && (
-            <div className="rounded-lg border p-4 bg-muted/30">
-              <h3 className="text-sm font-semibold mb-2">PR Summary</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {data.pr_summary.summary_text}
-              </p>
-            </div>
-          )}
-
+      {showWorkspace && (
+        <ReviewWorkspace
+          pipeline={
+            <NodeExecutionPanel
+              nodeStatuses={nodeStatuses}
+              nodeTimings={nodeTimings}
+              totalElapsedMs={totalElapsedMs}
+              isComplete={isSuccess}
+            />
+          }
+        >
           <AnalysisSummaryPanel
             severityLevel={severityLevel}
             requiresHumanReview={requiresHumanReview}
             findingsCount={findingsCount}
-            summaryText={undefined}
+            summaryText={
+              typeof data?.pr_summary?.summary_text === 'string'
+                ? data.pr_summary.summary_text
+                : undefined
+            }
+            activeFilter={findingFilter}
+            onFilterChange={setFindingFilter}
           />
 
-          {inlineComments.length > 0 && (
-            <>
-              <Separator />
-              <div>
-                <h2 className="text-lg font-semibold mb-4">Inline Comments</h2>
-                <div className="space-y-3">
-                  {inlineComments.map((comment: any, i: number) => (
-                    <div
-                      key={i}
-                      className="border-l-4 border-yellow-400 bg-yellow-50 dark:bg-yellow-950/20 rounded-r-md p-3 text-sm"
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-mono text-muted-foreground font-semibold">
-                          {comment.file_path ?? comment.path}:{comment.line_number ?? comment.line}
-                        </span>
-                        {comment.severity && (
-                          <span className="text-xs capitalize bg-muted px-2 py-0.5 rounded">
-                            {comment.severity}
-                          </span>
-                        )}
-                      </div>
-                      <p>{comment.comment ?? comment.body}</p>
-                      {comment.suggestion && (
-                        <pre className="mt-2 text-xs bg-muted/50 rounded p-2 overflow-x-auto whitespace-pre-wrap font-mono">
-                          {comment.suggestion}
-                        </pre>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="h-8">
+              <TabsTrigger value="findings" className="text-xs">
+                Findings
+              </TabsTrigger>
+              <TabsTrigger value="diff" className="text-xs" disabled={!submittedDiff}>
+                Diff
+                {inlineComments.length > 0 && (
+                  <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">
+                    ({inlineComments.length})
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="findings" className="mt-3">
+              <FindingsList
+                findings={findings}
+                filter={findingFilter}
+                onLocate={submittedDiff ? handleLocate : undefined}
+              />
+            </TabsContent>
+            <TabsContent value="diff" className="mt-3">
+              {submittedDiff ? (
+                <CodeDiffViewer
+                  gitDiff={submittedDiff}
+                  inlineComments={inlineComments}
+                  highlightLine={highlightLine}
+                />
+              ) : (
+                <EmptyReviewState
+                  title="No diff available"
+                  description="Submit a git diff to inspect changes and inline review threads."
+                />
+              )}
+            </TabsContent>
+          </Tabs>
+        </ReviewWorkspace>
       )}
     </div>
   );

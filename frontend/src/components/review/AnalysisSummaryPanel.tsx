@@ -2,7 +2,16 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ShieldAlert, Zap, BookOpen, Building2, AlertTriangle } from 'lucide-react';
+import {
+  ShieldAlert,
+  Zap,
+  BookOpen,
+  Building2,
+  AlertTriangle,
+  LayoutGrid,
+} from 'lucide-react';
+import type { FindingCategory } from '@/store/reviewStore';
+import { cn } from '@/lib/utils';
 
 interface FindingsCount {
   total: number;
@@ -17,68 +26,69 @@ interface Props {
   requiresHumanReview: boolean;
   findingsCount: FindingsCount;
   summaryText?: string;
+  activeFilter?: FindingCategory;
+  onFilterChange?: (filter: FindingCategory) => void;
 }
 
-function getSeverityVariant(level: string | null): 'destructive' | 'default' | 'secondary' | 'outline' {
+function severityClass(level: string | null): string {
   switch (level?.toLowerCase()) {
     case 'critical':
+      return 'sev-critical';
     case 'high':
-      return 'destructive';
+      return 'sev-high';
     case 'medium':
-      return 'default';
+      return 'sev-medium';
     default:
-      return 'secondary';
+      return 'sev-low';
   }
 }
 
-function getSeverityColor(level: string | null): string {
+function severityRing(level: string | null): string {
   switch (level?.toLowerCase()) {
     case 'critical':
     case 'high':
-      return 'text-red-600 dark:text-red-400';
+      return 'ring-[var(--sev-high)]/40 bg-[var(--sev-high)]/10';
     case 'medium':
-      return 'text-yellow-600 dark:text-yellow-400';
+      return 'ring-[var(--sev-medium)]/40 bg-[var(--sev-medium)]/10';
     default:
-      return 'text-green-600 dark:text-green-400';
+      return 'ring-[var(--sev-low)]/40 bg-[var(--sev-low)]/10';
   }
 }
 
-const scorecards = [
+const scorecards: {
+  key: Exclude<FindingCategory, 'all'>;
+  label: string;
+  Icon: typeof Building2;
+  accent: string;
+  ring: string;
+}[] = [
   {
-    key: 'architecture' as const,
+    key: 'architecture',
     label: 'Architecture',
     Icon: Building2,
-    color: 'text-blue-500',
-    bgLight: 'bg-blue-500/10',
-    border: 'border-blue-500/20 hover:border-blue-500/50',
-    shadow: 'hover:shadow-[0_0_15px_rgba(59,130,246,0.15)]'
+    accent: 'text-sky-500',
+    ring: 'ring-sky-500/50',
   },
   {
-    key: 'security' as const,
+    key: 'security',
     label: 'Security',
     Icon: ShieldAlert,
-    color: 'text-red-500',
-    bgLight: 'bg-red-500/10',
-    border: 'border-red-500/20 hover:border-red-500/50',
-    shadow: 'hover:shadow-[0_0_15px_rgba(239,68,68,0.15)]'
+    accent: 'sev-high',
+    ring: 'ring-[var(--sev-high)]/50',
   },
   {
-    key: 'performance' as const,
+    key: 'performance',
     label: 'Performance',
     Icon: Zap,
-    color: 'text-yellow-500',
-    bgLight: 'bg-yellow-500/10',
-    border: 'border-yellow-500/20 hover:border-yellow-500/50',
-    shadow: 'hover:shadow-[0_0_15px_rgba(234,179,8,0.15)]'
+    accent: 'sev-medium',
+    ring: 'ring-[var(--sev-medium)]/50',
   },
   {
-    key: 'best_practices' as const,
+    key: 'best_practices',
     label: 'Best Practices',
     Icon: BookOpen,
-    color: 'text-green-500',
-    bgLight: 'bg-green-500/10',
-    border: 'border-green-500/20 hover:border-green-500/50',
-    shadow: 'hover:shadow-[0_0_15px_rgba(34,197,94,0.15)]'
+    accent: 'sev-low',
+    ring: 'ring-[var(--sev-low)]/50',
   },
 ];
 
@@ -87,63 +97,110 @@ export default function AnalysisSummaryPanel({
   requiresHumanReview,
   findingsCount,
   summaryText,
+  activeFilter = 'all',
+  onFilterChange,
 }: Props) {
+  const interactive = Boolean(onFilterChange);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4 bg-card/50 backdrop-blur-sm border rounded-xl p-4 shadow-sm">
+    <div className="space-y-4">
+      <div className="surface-panel flex flex-wrap items-center justify-between gap-4 p-4">
         <div className="flex items-center gap-4">
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Severity</span>
-            <Badge variant={getSeverityVariant(severityLevel)} className="text-sm px-4 py-1.5 font-bold tracking-wide rounded-md shadow-sm">
-              <span className={getSeverityColor(severityLevel)}>
-                {severityLevel?.toUpperCase() ?? 'UNKNOWN'}
-              </span>
-            </Badge>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Severity
+            </span>
+            <span
+              className={cn(
+                'inline-flex w-fit items-center rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-wide ring-1',
+                severityRing(severityLevel),
+                severityClass(severityLevel),
+              )}
+            >
+              {severityLevel?.toUpperCase() ?? 'UNKNOWN'}
+            </span>
           </div>
-          <div className="h-10 w-px bg-border/50 mx-2" />
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Total Issues</span>
-            <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+          <div className="h-8 w-px bg-border/60" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Total Issues
+            </span>
+            <span className="text-2xl font-bold tabular-nums tracking-tight">
               {findingsCount.total}
             </span>
           </div>
         </div>
+
+        {interactive && (
+          <button
+            type="button"
+            onClick={() => onFilterChange?.('all')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
+              activeFilter === 'all'
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'border-border/60 text-muted-foreground hover:bg-muted/50',
+            )}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            All
+          </button>
+        )}
       </div>
 
       {requiresHumanReview && (
-        <div className="flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 to-yellow-500/5 p-4 text-yellow-700 dark:text-yellow-400 shadow-sm animate-in fade-in slide-in-from-top-2">
-          <AlertTriangle className="h-5 w-5 shrink-0 animate-pulse" />
-          <span className="text-sm font-medium tracking-wide">Human review is strictly required for this submission.</span>
+        <div className="flex items-center gap-3 rounded-lg border border-[var(--sev-medium)]/30 bg-[var(--sev-medium)]/10 p-3 text-[var(--sev-medium)]">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span className="text-sm font-medium">Human review required for this submission.</span>
         </div>
       )}
 
       {summaryText && (
-        <div className="bg-muted/30 p-4 rounded-xl border border-border/50 backdrop-blur-sm">
-          <p className="text-sm text-foreground/90 leading-relaxed font-medium">{summaryText}</p>
+        <div className="surface-panel p-4">
+          <p className="text-sm leading-relaxed text-foreground/90">{summaryText}</p>
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {scorecards.map(({ key, label, Icon, color, bgLight, border, shadow }) => (
-          <Card
-            key={key}
-            className={`relative overflow-hidden transition-all duration-300 transform hover:-translate-y-1 hover:bg-card/80 backdrop-blur-sm ${border} ${shadow} cursor-default group`}
-          >
-            <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full blur-2xl opacity-50 transition-opacity group-hover:opacity-70 ${bgLight}`} />
-            <CardHeader className="pb-2 pt-5 relative z-10 flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-sm font-semibold tracking-tight text-foreground/80">{label}</CardTitle>
-              <div className={`p-2 rounded-lg ${bgLight}`}>
-                <Icon className={`h-4 w-4 ${color}`} />
-              </div>
-            </CardHeader>
-            <CardContent className="pb-5 relative z-10">
-              <div className="flex items-baseline space-x-2">
-                <span className="text-4xl font-extrabold tracking-tighter">{findingsCount[key]}</span>
-                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Issues</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {scorecards.map(({ key, label, Icon, accent, ring }) => {
+          const selected = activeFilter === key;
+          return (
+            <Card
+              key={key}
+              role={interactive ? 'button' : undefined}
+              tabIndex={interactive ? 0 : undefined}
+              onClick={() => {
+                if (!interactive) return;
+                onFilterChange?.(selected ? 'all' : key);
+              }}
+              onKeyDown={(e) => {
+                if (!interactive) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onFilterChange?.(selected ? 'all' : key);
+                }
+              }}
+              className={cn(
+                'relative overflow-hidden border-border/60 bg-card transition-all duration-200',
+                interactive && 'cursor-pointer hover:bg-muted/30',
+                selected && cn('ring-2', ring, 'bg-muted/20'),
+              )}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-4 px-4">
+                <CardTitle className="text-xs font-medium text-muted-foreground">{label}</CardTitle>
+                <Icon className={cn('h-3.5 w-3.5', accent)} />
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <span className="text-3xl font-bold tabular-nums tracking-tight">
+                  {findingsCount[key]}
+                </span>
+                <span className="ml-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  issues
+                </span>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

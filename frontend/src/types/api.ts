@@ -155,6 +155,27 @@ export interface FileAnalysis {
   findings_count: number;
 }
 
+// ── Repo Picker (verify + branch + file/folder browse) ────────────────────────
+
+export interface RepoVerifyResponse {
+  owner: string;
+  repo: string;
+  default_branch: string;
+  private: boolean;
+  description?: string | null;
+  branches: string[];
+}
+
+export interface RepoTreeFile {
+  path: string;
+  language: string;
+}
+
+export interface RepoTreeResponse {
+  files: RepoTreeFile[];
+  truncated: boolean;
+}
+
 export interface DirectoryReviewResponse {
   requires_human_review: boolean;
   review_complete: boolean;

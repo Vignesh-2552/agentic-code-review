@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, ChevronDown, FileCode, FolderOpen, Folder } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import type { FileAnalysis, InlineComment } from '@/types/api';
+import { cn } from '@/lib/utils';
 
 interface TreeNode {
   name: string;
@@ -41,7 +41,7 @@ function buildTree(files: FileAnalysis[]): TreeNode {
   return root;
 }
 
-function severityColor(count: number) {
+function countVariant(count: number): 'secondary' | 'destructive' | 'default' {
   if (count === 0) return 'secondary';
   if (count >= 5) return 'destructive';
   return 'default';
@@ -63,7 +63,8 @@ function TreeNodeRow({ node, depth, selectedPath, onSelect }: NodeProps) {
     return (
       <div>
         <button
-          className="flex w-full items-center gap-1.5 px-2 py-1 rounded hover:bg-muted text-sm text-left"
+          type="button"
+          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs hover:bg-muted/60"
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
           onClick={() => setOpen((o) => !o)}
         >
@@ -73,11 +74,11 @@ function TreeNodeRow({ node, depth, selectedPath, onSelect }: NodeProps) {
             <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
           {open ? (
-            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-yellow-500" />
+            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--sev-medium)]" />
           ) : (
-            <Folder className="h-3.5 w-3.5 shrink-0 text-yellow-500" />
+            <Folder className="h-3.5 w-3.5 shrink-0 text-[var(--sev-medium)]" />
           )}
-          <span className="font-medium">{node.name}</span>
+          <span className="truncate font-medium">{node.name}</span>
         </button>
         {open &&
           node.children.map((child) => (
@@ -98,16 +99,20 @@ function TreeNodeRow({ node, depth, selectedPath, onSelect }: NodeProps) {
 
   return (
     <button
-      className={`flex w-full items-center gap-1.5 px-2 py-1 rounded text-sm text-left transition-colors ${
-        isSelected ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted'
-      }`}
+      type="button"
+      className={cn(
+        'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition-colors',
+        isSelected
+          ? 'bg-primary/12 text-primary font-medium'
+          : 'hover:bg-muted/60 text-foreground/80',
+      )}
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
       onClick={() => onSelect(node.path)}
     >
-      <FileCode className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-      <span className="flex-1 truncate">{node.name}</span>
+      <FileCode className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+      <span className="flex-1 truncate font-mono">{node.name}</span>
       {count > 0 && (
-        <Badge variant={severityColor(count)} className="text-xs px-1.5 py-0 h-4">
+        <Badge variant={countVariant(count)} className="h-4 px-1.5 py-0 text-[10px] tabular-nums">
           {count}
         </Badge>
       )}
@@ -115,24 +120,18 @@ function TreeNodeRow({ node, depth, selectedPath, onSelect }: NodeProps) {
   );
 }
 
-interface FilePanelProps {
-  fileAnalysis: FileAnalysis;
-}
-
-function FilePanel({ fileAnalysis }: FilePanelProps) {
+function FilePanel({ fileAnalysis }: { fileAnalysis: FileAnalysis }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <FileCode className="h-4 w-4 text-blue-400" />
-        <span className="font-mono text-sm font-medium">{fileAnalysis.file_path}</span>
-        <Badge variant="outline" className="text-xs capitalize">
+      <div className="flex flex-wrap items-center gap-2">
+        <FileCode className="h-4 w-4 text-sky-400" />
+        <span className="font-mono text-sm font-medium break-all">{fileAnalysis.file_path}</span>
+        <Badge variant="outline" className="text-[10px] capitalize">
           {fileAnalysis.language}
         </Badge>
-        <Badge
-          variant={severityColor(fileAnalysis.findings_count)}
-          className="text-xs"
-        >
-          {fileAnalysis.findings_count} finding{fileAnalysis.findings_count !== 1 ? 's' : ''}
+        <Badge variant={countVariant(fileAnalysis.findings_count)} className="text-[10px] tabular-nums">
+          {fileAnalysis.findings_count} finding
+          {fileAnalysis.findings_count !== 1 ? 's' : ''}
         </Badge>
       </div>
 
@@ -143,27 +142,28 @@ function FilePanel({ fileAnalysis }: FilePanelProps) {
           {fileAnalysis.inline_comments.map((c: InlineComment, i: number) => (
             <div
               key={i}
-              className={`border-l-4 rounded-r-md p-3 text-sm ${
+              className={cn(
+                'rounded-r-md border-l-2 p-3 text-sm',
                 c.severity === 'critical' || c.severity === 'high'
-                  ? 'border-red-500 bg-red-50 dark:bg-red-950/20'
+                  ? 'border-l-[var(--sev-high)] bg-[var(--sev-high)]/10'
                   : c.severity === 'medium'
-                  ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20'
-                  : 'border-blue-400 bg-blue-50 dark:bg-blue-950/20'
-              }`}
+                    ? 'border-l-[var(--sev-medium)] bg-[var(--sev-medium)]/10'
+                    : 'border-l-[var(--sev-low)] bg-[var(--sev-low)]/10',
+              )}
             >
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-mono text-muted-foreground">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="font-mono text-[11px] text-muted-foreground">
                   Line {c.line_number}
                 </span>
                 {c.severity && (
-                  <Badge variant="outline" className="text-xs capitalize">
+                  <Badge variant="outline" className="text-[10px] capitalize">
                     {c.severity}
                   </Badge>
                 )}
               </div>
-              <p>{c.comment}</p>
+              <p className="leading-relaxed">{c.comment}</p>
               {c.suggestion && (
-                <pre className="mt-2 text-xs bg-muted/50 rounded p-2 overflow-x-auto whitespace-pre-wrap font-mono">
+                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-md border border-border/50 bg-muted/40 p-2 font-mono text-[11px]">
                   {c.suggestion}
                 </pre>
               )}
@@ -180,18 +180,24 @@ interface Props {
 }
 
 export default function FileTreeExplorer({ fileFindings }: Props) {
-  const [selectedPath, setSelectedPath] = useState<string | null>(
-    fileFindings[0]?.file_path ?? null
-  );
+  const defaultPath = useMemo(() => {
+    const withIssues = fileFindings.find((f) => f.findings_count > 0);
+    return withIssues?.file_path ?? fileFindings[0]?.file_path ?? null;
+  }, [fileFindings]);
 
-  const tree = buildTree(fileFindings);
+  const [selectedPath, setSelectedPath] = useState<string | null>(defaultPath);
+
+  useEffect(() => {
+    setSelectedPath(defaultPath);
+  }, [defaultPath]);
+
+  const tree = useMemo(() => buildTree(fileFindings), [fileFindings]);
   const selectedFile = fileFindings.find((f) => f.file_path === selectedPath);
 
   return (
-    <div className="flex gap-0 border rounded-lg overflow-hidden min-h-[400px]">
-      {/* Sidebar tree */}
-      <div className="w-60 shrink-0 border-r bg-muted/20 overflow-y-auto py-2">
-        <p className="px-3 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+    <div className="surface-panel flex min-h-[420px] overflow-hidden">
+      <div className="w-64 shrink-0 overflow-y-auto border-r border-border/60 bg-muted/15 py-2">
+        <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Files ({fileFindings.length})
         </p>
         {tree.children.map((child) => (
@@ -205,8 +211,7 @@ export default function FileTreeExplorer({ fileFindings }: Props) {
         ))}
       </div>
 
-      {/* File detail panel */}
-      <div className="flex-1 p-4 overflow-y-auto">
+      <div className="min-w-0 flex-1 overflow-y-auto p-4">
         {selectedFile ? (
           <FilePanel fileAnalysis={selectedFile} />
         ) : (

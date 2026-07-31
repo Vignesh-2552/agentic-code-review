@@ -95,6 +95,27 @@ class DirectoryReviewResponse(BaseModel):
     findings_count: Dict[str, int]
 
 
+class RepoVerifyResponse(BaseModel):
+    """Response for GET /github/verify — confirms a repo exists and lists its branches."""
+    owner: str
+    repo: str
+    default_branch: str
+    private: bool
+    description: Optional[str] = None
+    branches: List[str]
+
+
+class RepoTreeFile(BaseModel):
+    path: str
+    language: str
+
+
+class RepoTreeResponse(BaseModel):
+    """Response for GET /github/tree — flat list of supported source files at a branch."""
+    files: List[RepoTreeFile]
+    truncated: bool
+
+
 class HealthResponse(BaseModel):
     """Health check response."""
     status: str

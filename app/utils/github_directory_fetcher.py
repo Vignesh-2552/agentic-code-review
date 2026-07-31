@@ -4,24 +4,18 @@ Fetch all supported source files from a GitHub directory URL.
 Parses URLs of the form:
   https://github.com/{owner}/{repo}/tree/{branch}/{path}
 
-Uses the GitHub Contents API:
-  GET /repos/{owner}/{repo}/contents/{path}?ref={branch}
+Lists the repo's files with a single call to the Git Trees API (see
+app.utils.github_repo.fetch_repo_tree) rather than crawling the Contents API
+one request per subfolder, and downloads raw content directly from
+raw.githubusercontent.com, which isn't subject to the api.github.com rate
+limit — so a directory review costs exactly one GitHub API call regardless
+of how deeply nested it is.
 """
 
-import json
-import urllib.error
 import urllib.request
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
-_SUPPORTED_EXTENSIONS = {".py", ".js", ".tsx", ".jsx", ".html"}
-
-_EXTENSION_TO_LANG = {
-    ".py": "python",
-    ".js": "javascript",
-    ".tsx": "typescript",
-    ".jsx": "javascript",
-    ".html": "html",
-}
+from app.utils.github_repo import fetch_repo_tree
 
 
 def parse_tree_url(url: str) -> tuple[str, str, str, str]:
@@ -55,74 +49,12 @@ def parse_tree_url(url: str) -> tuple[str, str, str, str]:
     return owner, repo, branch, dir_path
 
 
-def _api_get(url: str, token: str | None = None) -> object:
-    """Perform a GitHub API GET request and return parsed JSON."""
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "code-review-agent"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-
-
-def _collect_files(
-    owner: str,
-    repo: str,
-    branch: str,
-    path: str,
-    token: str | None,
-    results: list[dict],
-    depth: int = 0,
-) -> None:
-    """Recursively collect supported files from a GitHub directory."""
-    if depth > 5:
-        return  # safety cap against deeply nested repos
-
-    api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={branch}"
-    try:
-        entries = _api_get(api_url, token)
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            hint = (
-                "Path not found. This usually means: "
-                "(1) the repository is private — set GITHUB_TOKEN in your .env, "
-                "(2) the path or branch name is incorrect, or "
-                "(3) the directory does not exist."
-            )
-            raise ValueError(f"GitHub API 404 for path '{path}'. {hint}") from exc
-        if exc.code == 403:
-            raise ValueError(
-                f"GitHub API rate limit exceeded (path '{path}'). "
-                "Set GITHUB_TOKEN in your .env to raise the limit from 60 to 5000 requests/hr."
-            ) from exc
-        raise ValueError(f"GitHub API error for path '{path}': {exc.code} {exc.reason}") from exc
-
-    if not isinstance(entries, list):
-        # single file returned — shouldn't happen for a directory
-        return
-
-    for entry in entries:
-        entry_type = entry.get("type")
-        entry_path = entry.get("path", "")
-        if entry_type == "file":
-            dot = entry_path.rfind(".")
-            ext = entry_path[dot:] if dot != -1 else ""
-            if ext in _SUPPORTED_EXTENSIONS:
-                results.append({
-                    "path": entry_path,
-                    "download_url": entry.get("download_url"),
-                    "language": _EXTENSION_TO_LANG[ext],
-                })
-        elif entry_type == "dir":
-            _collect_files(owner, repo, branch, entry_path, token, results, depth + 1)
-
-
-def _fetch_raw(download_url: str, token: str | None) -> str:
-    """Download raw file content."""
+def _fetch_raw(raw_url: str, token: str | None) -> str:
+    """Download raw file content from raw.githubusercontent.com."""
     headers = {"User-Agent": "code-review-agent"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(download_url, headers=headers)
+    req = urllib.request.Request(raw_url, headers=headers)
     with urllib.request.urlopen(req, timeout=15) as resp:
         return resp.read().decode("utf-8", errors="replace")
 
@@ -138,18 +70,26 @@ def fetch_directory_files(url: str, token: str | None = None) -> list[dict]:
     """
     owner, repo, branch, dir_path = parse_tree_url(url)
 
-    file_meta: list[dict] = []
-    _collect_files(owner, repo, branch, dir_path, token, file_meta)
+    all_files, _truncated = fetch_repo_tree(owner, repo, branch, token=token)
+
+    if dir_path:
+        prefix = dir_path.rstrip("/") + "/"
+        file_meta = [f for f in all_files if f["path"] == dir_path or f["path"].startswith(prefix)]
+    else:
+        file_meta = all_files
 
     if not file_meta:
         raise ValueError("No supported source files (.py, .js) found in the specified directory")
 
+    branch_segment = quote(branch, safe="")
     total_chars = 0
     results = []
     for meta in file_meta:
-        if not meta.get("download_url"):
-            continue
-        content = _fetch_raw(meta["download_url"], token)
+        raw_url = (
+            f"https://raw.githubusercontent.com/{quote(owner)}/{quote(repo)}/"
+            f"{branch_segment}/{quote(meta['path'], safe='/')}"
+        )
+        content = _fetch_raw(raw_url, token)
         total_chars += len(content)
         if total_chars > 200_000:
             # Hard cap to avoid blowing up the LLM token window

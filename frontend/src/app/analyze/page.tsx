@@ -1,11 +1,15 @@
 'use client';
 
+import { useEffect, useMemo } from 'react';
 import ReviewInputForm from '@/components/forms/ReviewInputForm';
 import AnalysisSummaryPanel from '@/components/review/AnalysisSummaryPanel';
-import CardDisplay from '@/components/review/CardDisplay';
+import CollapsibleInput, { useCollapsibleInput } from '@/components/review/CollapsibleInput';
+import EmptyReviewState from '@/components/review/EmptyReviewState';
+import FindingsList, { flattenFindings } from '@/components/review/FindingsList';
 import NodeExecutionPanel from '@/components/review/NodeExecutionPanel';
-import { Separator } from '@/components/ui/separator';
+import ReviewWorkspace from '@/components/review/ReviewWorkspace';
 import { useStreamAnalyzeCode } from '@/lib/api';
+import { useReviewStore } from '@/store/reviewStore';
 
 export default function AnalyzePage() {
   const {
@@ -20,8 +24,17 @@ export default function AnalyzePage() {
     totalElapsedMs,
   } = useStreamAnalyzeCode();
 
+  const { collapsed, toggle, collapse } = useCollapsibleInput(false);
+  const findingFilter = useReviewStore((s) => s.findingFilter);
+  const setFindingFilter = useReviewStore((s) => s.setFindingFilter);
+
+  useEffect(() => {
+    setFindingFilter('all');
+  }, [setFindingFilter]);
+
   const severityLevel = data?.severity_level ?? partialFindings.severity_level ?? null;
-  const requiresHumanReview = data?.requires_human_review ?? partialFindings.requires_human_review ?? false;
+  const requiresHumanReview =
+    data?.requires_human_review ?? partialFindings.requires_human_review ?? false;
   const findingsCount = data
     ? {
         total: data.summary.total_issues,
@@ -30,62 +43,87 @@ export default function AnalyzePage() {
         performance: data.summary.performance_issues,
         best_practices: data.summary.best_practice_violations,
       }
-    : null;
+    : {
+        total:
+          (partialFindings.security_vulnerabilities?.length ?? 0) +
+          (partialFindings.performance_issues?.length ?? 0) +
+          (partialFindings.best_practice_violations?.length ?? 0) +
+          (partialFindings.architecture_issues?.length ?? 0),
+        architecture: partialFindings.architecture_issues?.length ?? 0,
+        security: partialFindings.security_vulnerabilities?.length ?? 0,
+        performance: partialFindings.performance_issues?.length ?? 0,
+        best_practices: partialFindings.best_practice_violations?.length ?? 0,
+      };
+
+  const findings = useMemo(
+    () =>
+      flattenFindings({
+        architecture: partialFindings.architecture_issues,
+        security: data?.security_vulnerabilities ?? partialFindings.security_vulnerabilities,
+        performance: data?.performance_issues ?? partialFindings.performance_issues,
+        best_practices:
+          data?.best_practice_violations ?? partialFindings.best_practice_violations,
+      }),
+    [data, partialFindings],
+  );
+
+  const showWorkspace = isPending || isSuccess;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold mb-1">Single File Review</h1>
-        <p className="text-muted-foreground text-sm">
-          Paste a GitHub file URL to analyze syntax, security, performance, and best practices.
+        <h1 className="text-xl font-semibold tracking-tight">Single File Review</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Paste a GitHub file URL to analyze security, performance, architecture, and best practices.
         </p>
       </div>
 
-      <ReviewInputForm mode="analyze" mutation={{ mutate, isPending, error }} hideLoadingState />
+      <CollapsibleInput
+        title="Review input"
+        description="GitHub blob URL + optional context"
+        collapsed={collapsed && showWorkspace}
+        onToggle={toggle}
+      >
+        <ReviewInputForm
+          mode="analyze"
+          mutation={{ mutate, isPending, error }}
+          hideLoadingState
+          compact
+          onSubmitStart={() => {
+            collapse();
+            setFindingFilter('all');
+          }}
+        />
+      </CollapsibleInput>
 
-      {(isPending || isSuccess) && (
-        <NodeExecutionPanel
-          nodeStatuses={nodeStatuses}
-          nodeTimings={nodeTimings}
-          totalElapsedMs={totalElapsedMs}
-          isComplete={isSuccess}
+      {!showWorkspace && (
+        <EmptyReviewState
+          title="Ready to review"
+          description="Submit a GitHub file URL to start the streaming analysis pipeline. Findings appear live as each node completes."
+          example="https://github.com/owner/repo/blob/main/src/auth.py"
         />
       )}
 
-      {(isPending || isSuccess) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <CardDisplay
-            title="Security Vulnerabilities"
-            items={data?.security_vulnerabilities ?? partialFindings.security_vulnerabilities}
-            colorClass="text-red-600 dark:text-red-400"
-          />
-          <CardDisplay
-            title="Performance Issues"
-            items={data?.performance_issues ?? partialFindings.performance_issues}
-            colorClass="text-yellow-600 dark:text-yellow-400"
-          />
-          <CardDisplay
-            title="Best Practice Violations"
-            items={data?.best_practice_violations ?? partialFindings.best_practice_violations}
-            colorClass="text-orange-600 dark:text-orange-400"
-          />
-          <CardDisplay
-            title="Architecture Issues"
-            items={partialFindings.architecture_issues}
-            colorClass="text-blue-600 dark:text-blue-400"
-          />
-        </div>
-      )}
-
-      {isSuccess && data && findingsCount && (
-        <>
-          <Separator />
+      {showWorkspace && (
+        <ReviewWorkspace
+          pipeline={
+            <NodeExecutionPanel
+              nodeStatuses={nodeStatuses}
+              nodeTimings={nodeTimings}
+              totalElapsedMs={totalElapsedMs}
+              isComplete={isSuccess}
+            />
+          }
+        >
           <AnalysisSummaryPanel
             severityLevel={severityLevel}
             requiresHumanReview={requiresHumanReview}
             findingsCount={findingsCount}
+            activeFilter={findingFilter}
+            onFilterChange={setFindingFilter}
           />
-        </>
+          <FindingsList findings={findings} filter={findingFilter} />
+        </ReviewWorkspace>
       )}
     </div>
   );
