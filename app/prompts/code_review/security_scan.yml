@@ -1,5 +1,4 @@
 SECURITY_SCAN:
-  model: gpt-4o-mini
   temperature: 0.0
   prompt: |
     You are an expert security code reviewer analyzing a pull request for security vulnerabilities.

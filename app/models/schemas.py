@@ -121,3 +121,97 @@ class HealthResponse(BaseModel):
     status: str
     timestamp: str
     version: str = "1.0.0"
+
+
+class ArchitectureIssue(BaseModel):
+    """A single architectural issue found by the architecture validation LLM call."""
+    file_path: str
+    line: Optional[int] = None
+    severity: str
+    type: str
+    description: str
+    recommendation: str
+
+
+class ArchitectureValidationResult(BaseModel):
+    """Structured output schema for the architecture validation LLM call."""
+    architecture_score: int
+    issues: List[ArchitectureIssue] = Field(default_factory=list)
+    summary: str
+
+
+class SecurityVulnerability(BaseModel):
+    """A single vulnerability found by the security scan LLM call."""
+    file_path: str
+    line: Optional[int] = None
+    severity: str
+    type: str
+    description: str
+    recommendation: str
+
+
+class SecurityScanResult(BaseModel):
+    """Structured output schema for the security scan LLM call."""
+    security_score: int
+    vulnerabilities: List[SecurityVulnerability] = Field(default_factory=list)
+    summary: str
+
+
+class PerformanceIssue(BaseModel):
+    """A single issue found by the performance analysis LLM call."""
+    file_path: str
+    line: Optional[int] = None
+    severity: str
+    type: str
+    description: str
+    optimization: str
+
+
+class PerformanceAnalysisResult(BaseModel):
+    """Structured output schema for the performance analysis LLM call."""
+    performance_score: int
+    issues: List[PerformanceIssue] = Field(default_factory=list)
+    summary: str
+
+
+class BestPracticeIssue(BaseModel):
+    """A single violation found by the best practices LLM call."""
+    file_path: str
+    line: Optional[int] = None
+    severity: str
+    category: str
+    description: str
+    recommendation: str
+
+
+class BestPracticesResult(BaseModel):
+    """Structured output schema for the best practices LLM call."""
+    best_practices_score: int
+    issues: List[BestPracticeIssue] = Field(default_factory=list)
+    summary: str
+
+
+class PRSummaryResult(BaseModel):
+    """Structured output schema for the PR summary generation LLM call."""
+    approval_status: str
+    summary_text: str
+    key_findings: List[str] = Field(default_factory=list)
+    positive_aspects: List[str] = Field(default_factory=list)
+    blocking_issues: List[str] = Field(default_factory=list)
+    non_blocking_suggestions: List[str] = Field(default_factory=list)
+
+
+class InlineComment(BaseModel):
+    """A single GitHub-style inline comment derived from aggregated findings."""
+    path: str
+    line: Optional[int] = None
+    position: Optional[int] = None
+    severity: str
+    category: str
+    body: str
+    suggestion: Optional[str] = None
+
+
+class InlineCommentsResult(BaseModel):
+    """Structured output schema for the inline comments generation LLM call."""
+    inline_comments: List[InlineComment] = Field(default_factory=list)

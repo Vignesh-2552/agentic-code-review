@@ -4,6 +4,7 @@ from loguru import logger
 
 from app.core.llm_service import LLMService
 from app.core.prompt_service import PromptService
+from app.models.schemas import InlineCommentsResult
 from app.models.types import PRReviewState
 
 
@@ -11,6 +12,7 @@ class GenerateInlineCommentsNode:
     def __init__(self, llm_service: LLMService, prompt_service: PromptService) -> None:
         self._llm_service = llm_service
         self._prompt_service = prompt_service
+        self._structured_model = llm_service.model.with_structured_output(InlineCommentsResult)
 
     async def __call__(self, state: PRReviewState) -> dict:
         logger.info("Generating inline comments from aggregated findings")
@@ -20,11 +22,9 @@ class GenerateInlineCommentsNode:
                 git_diff=state["git_diff"],
                 all_findings=json.dumps(all_findings, indent=2),
             )
-            response = await self._llm_service.model.ainvoke(prompt_str)
-            content = response.content if hasattr(response, 'content') else str(response)
-            result = self._llm_service.extract_json_from_response(content)
+            result: InlineCommentsResult = await self._structured_model.ainvoke(prompt_str)
 
-            comments = result.get("inline_comments", [])
+            comments = [comment.model_dump() for comment in result.inline_comments]
             logger.info(f"Generated {len(comments)} inline comments")
         except Exception as e:
             logger.error(f"Error generating inline comments: {e}", exc_info=True)

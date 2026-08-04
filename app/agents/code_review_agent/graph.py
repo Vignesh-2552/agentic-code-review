@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from langgraph.graph import END, StateGraph
 from loguru import logger
 
@@ -25,9 +27,9 @@ class CodeReviewGraph:
 
     Graph structure:
         ingest_pr → build_project_context
-                            ↓ (fan-out: 4 parallel edges)
+                            ↓ (fan-out: parallel edges)
         architecture_validation  security_scan  performance_check  best_practices
-                            ↓ (fan-in: all 4 → aggregate_findings)
+                            ↓ (fan-in: all → aggregate_findings)
                      aggregate_findings
                             ↓ (conditional)
                  human_escalation ──┐
@@ -36,10 +38,26 @@ class CodeReviewGraph:
                    generate_pr_summary → END
     """
 
+    # Single source of truth for the parallel analysis stage: node name → node class.
+    # Adding/removing an analysis stage only requires editing this mapping.
+    _ANALYSIS_NODE_CLASSES: ClassVar[dict[str, type]] = {
+        "architecture_validation": ArchitectureValidationNode,
+        "security_scan": SecurityScanNode,
+        "performance_check": PerformanceAnalysisNode,
+        "best_practices": BestPracticesNode,
+    }
+
     def __init__(self, llm_service: LLMService, prompt_service: PromptService) -> None:
         self._llm_service = llm_service
         self._prompt_service = prompt_service
         self._compiled_graph = self._build_graph()
+
+    def _register_analysis_nodes(self, workflow: StateGraph, fan_out_from: str, fan_in_to: str) -> None:
+        """Register the parallel analysis nodes and wire their fan-out/fan-in edges."""
+        for name, node_cls in self._ANALYSIS_NODE_CLASSES.items():
+            workflow.add_node(name, node_cls(self._llm_service, self._prompt_service))
+            workflow.add_edge(fan_out_from, name)
+            workflow.add_edge(name, fan_in_to)
 
     def _build_graph(self):
         logger.info("Building PR review workflow graph")
@@ -50,14 +68,13 @@ class CodeReviewGraph:
         workflow.add_node("ingest_pr", IngestPRNode())
         workflow.add_node("build_project_context", BuildProjectContextNode())
 
-        # Parallel analysis nodes
-        workflow.add_node("architecture_validation", ArchitectureValidationNode(self._llm_service, self._prompt_service))
-        workflow.add_node("security_scan", SecurityScanNode(self._llm_service, self._prompt_service))
-        workflow.add_node("performance_check", PerformanceAnalysisNode(self._llm_service, self._prompt_service))
-        workflow.add_node("best_practices", BestPracticesNode(self._llm_service, self._prompt_service))
-
-        # Fan-in aggregation
+        # Fan-in aggregation (target node must exist before analysis nodes wire into it)
         workflow.add_node("aggregate_findings", AggregateFindingsNode())
+
+        # Parallel analysis nodes + fan-out/fan-in edges
+        self._register_analysis_nodes(
+            workflow, fan_out_from="build_project_context", fan_in_to="aggregate_findings"
+        )
 
         # Post-aggregation nodes
         workflow.add_node("human_escalation", HumanEscalationNode())
@@ -66,18 +83,6 @@ class CodeReviewGraph:
 
         # Sequential start
         workflow.add_edge("ingest_pr", "build_project_context")
-
-        # Fan-out: build_project_context → 4 parallel analysis nodes
-        workflow.add_edge("build_project_context", "architecture_validation")
-        workflow.add_edge("build_project_context", "security_scan")
-        workflow.add_edge("build_project_context", "performance_check")
-        workflow.add_edge("build_project_context", "best_practices")
-
-        # Fan-in: all 4 analysis nodes → aggregate_findings
-        workflow.add_edge("architecture_validation", "aggregate_findings")
-        workflow.add_edge("security_scan", "aggregate_findings")
-        workflow.add_edge("performance_check", "aggregate_findings")
-        workflow.add_edge("best_practices", "aggregate_findings")
 
         # Conditional routing after aggregation
         workflow.add_conditional_edges(

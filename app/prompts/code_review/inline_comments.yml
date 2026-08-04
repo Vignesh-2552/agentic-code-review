@@ -1,5 +1,4 @@
 INLINE_COMMENTS:
-  model: gpt-4o-mini
   temperature: 0.0
   prompt: |
     You are a code review assistant converting analysis findings into GitHub-style inline comments.

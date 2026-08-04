@@ -1,6 +1,7 @@
 from loguru import logger
 
 from app.models.types import PRReviewState
+from app.models.schemas import BestPracticesResult
 from app.core.llm_service import LLMService
 from app.core.prompt_service import PromptService
 from .build_project_context import _format_related_files_context
@@ -10,6 +11,7 @@ class BestPracticesNode:
     def __init__(self, llm_service: LLMService, prompt_service: PromptService) -> None:
         self._llm_service = llm_service
         self._prompt_service = prompt_service
+        self._structured_model = llm_service.model.with_structured_output(BestPracticesResult)
 
     async def __call__(self, state: PRReviewState) -> dict:
         logger.info("Starting best practices check")
@@ -26,11 +28,9 @@ class BestPracticesNode:
                 pr_title=state.get("pr_title", ""),
                 commit_messages=commit_messages_str,
             )
-            response = await self._llm_service.model.ainvoke(prompt_str)
-            content = response.content if hasattr(response, 'content') else str(response)
-            result = self._llm_service.extract_json_from_response(content)
+            result: BestPracticesResult = await self._structured_model.ainvoke(prompt_str)
 
-            issues = result.get("issues", [])
+            issues = [issue.model_dump() for issue in result.issues]
             for issue in issues:
                 issue.setdefault("source", "best_practices")
 

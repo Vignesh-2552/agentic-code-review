@@ -1,5 +1,4 @@
 BEST_PRACTICES:
-  model: gpt-4o-mini
   temperature: 0.0
   prompt: |
     You are an expert code reviewer specializing in software engineering best practices for pull requests.

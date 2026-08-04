@@ -1,5 +1,5 @@
 PR_SUMMARY:
-  model: gpt-4o-mini
+
   temperature: 0.0
   prompt: |
     You are a senior code reviewer writing a comprehensive PR review summary.

@@ -1,5 +1,4 @@
 PERFORMANCE_ANALYSIS:
-  model: gpt-4o-mini
   temperature: 0.0
   prompt: |
     You are an expert performance code reviewer analyzing a pull request for performance issues.

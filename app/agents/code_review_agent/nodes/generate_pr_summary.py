@@ -3,6 +3,7 @@ import json
 from loguru import logger
 
 from app.models.types import PRReviewState
+from app.models.schemas import PRSummaryResult
 from app.core.llm_service import LLMService
 from app.core.prompt_service import PromptService
 
@@ -26,6 +27,7 @@ class GeneratePRSummaryNode:
     def __init__(self, llm_service: LLMService, prompt_service: PromptService) -> None:
         self._llm_service = llm_service
         self._prompt_service = prompt_service
+        self._structured_model = llm_service.model.with_structured_output(PRSummaryResult)
 
     async def __call__(self, state: PRReviewState) -> dict:
         logger.info("Generating PR summary")
@@ -58,9 +60,8 @@ class GeneratePRSummaryNode:
                 severity_level=state.get("severity_level", "low"),
                 requires_human_review=str(state.get("requires_human_review", False)),
             )
-            response = await self._llm_service.model.ainvoke(prompt_str)
-            content = response.content if hasattr(response, 'content') else str(response)
-            result = self._llm_service.extract_json_from_response(content)
+            structured_result: PRSummaryResult = await self._structured_model.ainvoke(prompt_str)
+            result = structured_result.model_dump()
 
             logger.info(
                 f"PR summary generated with approval_status: {result.get('approval_status')}"

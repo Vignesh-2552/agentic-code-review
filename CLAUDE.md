@@ -66,7 +66,7 @@ app/
 
 **Environment Variables** (required):
 - `OPENAI_API_KEY`: OpenAI API key
-- `MODEL`: OpenAI model (e.g., gpt-4o-mini)
+- `MODEL`: OpenAI model 
 - `DATABASE_URL`: PostgreSQL connection string
 - `JWT_SECRET_KEY`: JWT signing key
 
