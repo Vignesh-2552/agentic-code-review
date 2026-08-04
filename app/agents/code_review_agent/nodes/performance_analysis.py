@@ -4,6 +4,7 @@ from app.models.types import PRReviewState
 from app.models.schemas import PerformanceAnalysisResult
 from app.core.llm_service import LLMService
 from app.core.prompt_service import PromptService
+from app.utils.node_result_writer import write_node_result_md
 from .build_project_context import _format_related_files_context
 
 
@@ -24,6 +25,12 @@ class PerformanceAnalysisNode:
                 related_files_context=related_files_context,
             )
             result: PerformanceAnalysisResult = await self._structured_model.ainvoke(prompt_str)
+            write_node_result_md(
+                state.get("run_id", "unknown-run"),
+                "performance_check",
+                "Performance Analysis",
+                result.model_dump(),
+            )
 
             issues = [issue.model_dump() for issue in result.issues]
             for issue in issues:

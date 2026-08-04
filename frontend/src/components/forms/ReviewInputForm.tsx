@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import RepoBranchPicker from '@/components/forms/RepoBranchPicker';
 import { cn } from '@/lib/utils';
 
 interface MutationLike<TVariables> {
@@ -14,16 +13,7 @@ interface MutationLike<TVariables> {
   error: Error | null;
 }
 
-interface AnalyzeFormProps {
-  mode: 'analyze';
-  mutation: MutationLike<{ github_url: string; context?: string }>;
-  hideLoadingState?: boolean;
-  compact?: boolean;
-  onSubmitStart?: () => void;
-}
-
-interface PRFormProps {
-  mode: 'pr';
+interface Props {
   mutation: MutationLike<{
     git_diff: string;
     pr_title: string;
@@ -37,11 +27,7 @@ interface PRFormProps {
   onDiffSubmit?: (diff: string) => void;
 }
 
-type Props = AnalyzeFormProps | PRFormProps;
-
 export default function ReviewInputForm(props: Props) {
-  const [githubUrl, setGithubUrl] = useState('');
-  const [context, setContext] = useState('');
   const [prTitle, setPrTitle] = useState('');
   const [gitDiff, setGitDiff] = useState('');
   const [prDescription, setPrDescription] = useState('');
@@ -52,100 +38,74 @@ export default function ReviewInputForm(props: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     props.onSubmitStart?.();
-    if (props.mode === 'analyze') {
-      if (!githubUrl) return;
-      props.mutation.mutate({ github_url: githubUrl, context: context || undefined });
-    } else {
-      props.onDiffSubmit?.(gitDiff);
-      props.mutation.mutate({
-        git_diff: gitDiff,
-        pr_title: prTitle,
-        pr_description: prDescription || undefined,
-        commit_messages: commitMessages
-          ? commitMessages.split(',').map((m) => m.trim()).filter(Boolean)
-          : undefined,
-      });
-    }
+    props.onDiffSubmit?.(gitDiff);
+    props.mutation.mutate({
+      git_diff: gitDiff,
+      pr_title: prTitle,
+      pr_description: prDescription || undefined,
+      commit_messages: commitMessages
+        ? commitMessages.split(',').map((m) => m.trim()).filter(Boolean)
+        : undefined,
+    });
   };
 
   return (
     <form onSubmit={handleSubmit} className={cn('space-y-4', props.compact && 'space-y-3')}>
-      {props.mode === 'analyze' ? (
-        <>
-          <RepoBranchPicker mode="file" onChange={(url) => setGithubUrl(url ?? '')} />
-          <div className="space-y-1.5">
-            <Label htmlFor="context" className="text-xs font-medium text-muted-foreground">
-              Context (optional)
-            </Label>
-            <Textarea
-              id="context"
-              placeholder="e.g. Check if my auth logic is safe"
-              value={context}
-              onChange={(e) => setContext(e.target.value)}
-              rows={2}
-              className="resize-none bg-background/60 text-sm"
-            />
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="space-y-1.5">
-            <Label htmlFor="pr_title" className="text-xs font-medium text-muted-foreground">
-              PR Title
-            </Label>
-            <Input
-              id="pr_title"
-              placeholder="feat: add user authentication"
-              value={prTitle}
-              onChange={(e) => setPrTitle(e.target.value)}
-              required
-              className="h-9 bg-background/60"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="git_diff" className="text-xs font-medium text-muted-foreground">
-              Git Diff
-            </Label>
-            <Textarea
-              id="git_diff"
-              placeholder="diff --git a/main.py b/main.py..."
-              value={gitDiff}
-              onChange={(e) => setGitDiff(e.target.value)}
-              rows={8}
-              required
-              className="font-mono text-[12px] bg-muted/30"
-            />
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="pr_description" className="text-xs font-medium text-muted-foreground">
-                PR Description (optional)
-              </Label>
-              <Textarea
-                id="pr_description"
-                placeholder="Implements JWT login and session management"
-                value={prDescription}
-                onChange={(e) => setPrDescription(e.target.value)}
-                rows={2}
-                className="resize-none bg-background/60 text-sm"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="commit_messages" className="text-xs font-medium text-muted-foreground">
-                Commit Messages (comma-separated)
-              </Label>
-              <Textarea
-                id="commit_messages"
-                placeholder="add jwt lib, wire up router, fix tests"
-                value={commitMessages}
-                onChange={(e) => setCommitMessages(e.target.value)}
-                rows={2}
-                className="resize-none bg-background/60 text-sm"
-              />
-            </div>
-          </div>
-        </>
-      )}
+      <div className="space-y-1.5">
+        <Label htmlFor="pr_title" className="text-xs font-medium text-muted-foreground">
+          PR Title
+        </Label>
+        <Input
+          id="pr_title"
+          placeholder="feat: add user authentication"
+          value={prTitle}
+          onChange={(e) => setPrTitle(e.target.value)}
+          required
+          className="h-9 bg-background/60"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="git_diff" className="text-xs font-medium text-muted-foreground">
+          Git Diff
+        </Label>
+        <Textarea
+          id="git_diff"
+          placeholder="diff --git a/main.py b/main.py..."
+          value={gitDiff}
+          onChange={(e) => setGitDiff(e.target.value)}
+          rows={8}
+          required
+          className="font-mono text-[12px] bg-muted/30"
+        />
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="pr_description" className="text-xs font-medium text-muted-foreground">
+            PR Description (optional)
+          </Label>
+          <Textarea
+            id="pr_description"
+            placeholder="Implements JWT login and session management"
+            value={prDescription}
+            onChange={(e) => setPrDescription(e.target.value)}
+            rows={2}
+            className="resize-none bg-background/60 text-sm"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="commit_messages" className="text-xs font-medium text-muted-foreground">
+            Commit Messages (comma-separated)
+          </Label>
+          <Textarea
+            id="commit_messages"
+            placeholder="add jwt lib, wire up router, fix tests"
+            value={commitMessages}
+            onChange={(e) => setCommitMessages(e.target.value)}
+            rows={2}
+            className="resize-none bg-background/60 text-sm"
+          />
+        </div>
+      </div>
 
       {mutation.error && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
@@ -155,7 +115,7 @@ export default function ReviewInputForm(props: Props) {
 
       <Button
         type="submit"
-        disabled={mutation.isPending || (props.mode === 'analyze' && !githubUrl)}
+        disabled={mutation.isPending}
         className="h-9 w-full text-sm font-semibold"
       >
         {mutation.isPending ? 'Analyzing…' : 'Run Review'}

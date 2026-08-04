@@ -1,18 +1,15 @@
 import json
 import time
-import urllib.error
 from datetime import datetime
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
 from app.api.dependencies import get_code_review_service
 from app.config.settings import settings
 from app.models.schemas import (
-    CodeReviewRequest,
-    CodeReviewResponse,
     DirectoryReviewRequest,
     DirectoryReviewResponse,
     FileAnalysis,
@@ -22,91 +19,8 @@ from app.models.schemas import (
 from app.models.types import PRReviewState
 from app.services.code_review_service import CodeReviewService
 from app.utils.github_directory_fetcher import build_synthetic_diff, fetch_directory_files
-from app.utils.github_fetcher import fetch_github_file
 
 router = APIRouter()
-
-
-@router.post("/analyze", response_model=CodeReviewResponse)
-async def review_code(
-    request: CodeReviewRequest,
-    review_service: CodeReviewService = Depends(get_code_review_service),
-):
-    """
-    Analyze code for syntax, security, performance, and best practice issues.
-    """
-    start_time = datetime.now()
-
-    try:
-        try:
-            code, language, file_type = fetch_github_file(request.github_url)
-        except ValueError as fetch_err:
-            raise HTTPException(status_code=400, detail=str(fetch_err))
-        except urllib.error.URLError:
-            raise HTTPException(status_code=502, detail="Could not fetch file from GitHub")
-
-        # Build a minimal PRReviewState from the fetched file so the
-        # shared service/graph can process it.  We synthesize a minimal diff
-        # from the raw code string so the V2 graph has something to work with.
-        synthetic_diff = (
-            f"diff --git a/snippet.{file_type} b/snippet.{file_type}\n"
-            f"--- a/snippet.{file_type}\n"
-            f"+++ b/snippet.{file_type}\n"
-            f"@@ -0,0 +1 @@\n"
-            + "\n".join(f"+{line}" for line in code.splitlines())
-        )
-
-        state: PRReviewState = {
-            "git_diff": synthetic_diff,
-            "pr_title": f"Code review: {language} snippet",
-            "pr_description": request.context,
-            "commit_messages": [],
-            "repository_context": {},
-        }
-
-        result = await review_service.analyze_code(state)
-        processing_time = (datetime.now() - start_time).total_seconds()
-
-        def count_valid(lst):
-            return len([x for x in (lst or []) if not x.get("error")])
-
-        security_count = count_valid(result.get("security_vulnerabilities"))
-        performance_count = count_valid(result.get("performance_issues"))
-        best_practice_count = count_valid(result.get("best_practice_violations"))
-        architecture_count = count_valid(result.get("architecture_issues"))
-        total_issues = security_count + performance_count + best_practice_count + architecture_count
-
-        return CodeReviewResponse(
-            severity_level=result.get("severity_level", "unknown"),
-            requires_human_review=result.get("requires_human_review", False),
-            analysis_complete=result.get("review_complete", False),
-            processing_time_seconds=processing_time,
-            syntax_issues=[],
-            security_vulnerabilities=result.get("security_vulnerabilities", []),
-            performance_issues=result.get("performance_issues", []),
-            style_violations=[],
-            best_practice_violations=result.get("best_practice_violations", []),
-            explanations=[],
-            improvement_suggestions=[],
-            learning_resources=[],
-            summary={
-                "total_issues": total_issues,
-                "syntax_issues": 0,
-                "security_vulnerabilities": security_count,
-                "performance_issues": performance_count,
-                "style_violations": 0,
-                "best_practice_violations": best_practice_count,
-                "architecture_issues": architecture_count,
-                "github_url": request.github_url,
-                "language": language,
-            },
-        )
-    except ValueError as e:
-        logger.warning(f"Validation error in /review/analyze: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error during code review: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.post("/pr", response_model=PRReviewResponse)
@@ -288,83 +202,6 @@ async def _pr_stream_generator(
         yield f"data: {json.dumps(complete_chunk)}\n\n"
 
 
-async def _analyze_stream_generator(
-    request: CodeReviewRequest,
-    review_service: CodeReviewService,
-) -> AsyncGenerator[str, None]:
-    try:
-        try:
-            code, language, file_type = fetch_github_file(request.github_url)
-        except ValueError as fetch_err:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(fetch_err)})}\n\n"
-            return
-        except urllib.error.URLError:
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Could not fetch file from GitHub'})}\n\n"
-            return
-
-        synthetic_diff = (
-            f"diff --git a/snippet.{file_type} b/snippet.{file_type}\n"
-            f"--- a/snippet.{file_type}\n"
-            f"+++ b/snippet.{file_type}\n"
-            f"@@ -0,0 +1 @@\n"
-            + "\n".join(f"+{line}" for line in code.splitlines())
-        )
-
-        state: PRReviewState = {
-            "git_diff": synthetic_diff,
-            "pr_title": f"Code review: {language} snippet",
-            "pr_description": request.context,
-            "commit_messages": [],
-            "repository_context": {},
-        }
-
-    except Exception as e:
-        yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
-        return
-
-    final_state: dict = {}
-
-    async for item in _graph_stream_generator(state, review_service):
-        if isinstance(item, dict) and not item.get("type"):
-            final_state = item
-        else:
-            yield item
-
-    if final_state:
-        def count_valid(lst):
-            return len([x for x in (lst or []) if not x.get("error")])
-
-        security_count = count_valid(final_state.get("security_vulnerabilities"))
-        performance_count = count_valid(final_state.get("performance_issues"))
-        best_practice_count = count_valid(final_state.get("best_practice_violations"))
-        architecture_count = count_valid(final_state.get("architecture_issues"))
-        total_issues = security_count + performance_count + best_practice_count + architecture_count
-
-        complete_chunk = {
-            "type": "complete",
-            "result": {
-                "severity_level": final_state.get("severity_level", "unknown"),
-                "requires_human_review": final_state.get("requires_human_review", False),
-                "analysis_complete": final_state.get("review_complete", False),
-                "security_vulnerabilities": final_state.get("security_vulnerabilities", []),
-                "performance_issues": final_state.get("performance_issues", []),
-                "best_practice_violations": final_state.get("best_practice_violations", []),
-                "summary": {
-                    "total_issues": total_issues,
-                    "syntax_issues": 0,
-                    "security_vulnerabilities": security_count,
-                    "performance_issues": performance_count,
-                    "style_violations": 0,
-                    "best_practice_violations": best_practice_count,
-                    "architecture_issues": architecture_count,
-                    "github_url": request.github_url,
-                    "language": language,
-                },
-            },
-        }
-        yield f"data: {json.dumps(complete_chunk)}\n\n"
-
-
 async def _directory_stream_generator(
     request: DirectoryReviewRequest,
     review_service: CodeReviewService,
@@ -466,24 +303,6 @@ async def review_pr_stream(
     """
     return StreamingResponse(
         _pr_stream_generator(request, review_service),
-        media_type="text/event-stream",
-        headers=_SSE_HEADERS,
-    )
-
-
-@router.post("/analyze/stream")
-async def review_analyze_stream(
-    request: CodeReviewRequest,
-    review_service: CodeReviewService = Depends(get_code_review_service),
-):
-    """
-    Stream a single-file code review via Server-Sent Events.
-    Fetches the file from GitHub, synthesises a diff, and streams
-    `node_complete` events followed by a `complete` event shaped as
-    CodeReviewResponse.
-    """
-    return StreamingResponse(
-        _analyze_stream_generator(request, review_service),
         media_type="text/event-stream",
         headers=_SSE_HEADERS,
     )

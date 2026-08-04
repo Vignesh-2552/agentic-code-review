@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 class PromptConfig(BaseModel):
     """Configuration for a specific prompt version."""
 
-    model: str = Field(..., description="The model to use for this prompt")
     temperature: float = Field(default=0.0, description="Temperature setting for the model")
     prompt: str = Field(..., description="The actual prompt template")
 

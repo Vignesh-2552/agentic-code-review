@@ -8,14 +8,14 @@ export type FindingCategory =
   | 'best_practices';
 
 interface ReviewStore {
-  mode: 'analyze' | 'pr' | 'directory';
-  setMode: (m: 'analyze' | 'pr' | 'directory') => void;
+  mode: 'pr' | 'directory';
+  setMode: (m: 'pr' | 'directory') => void;
   findingFilter: FindingCategory;
   setFindingFilter: (f: FindingCategory) => void;
 }
 
 export const useReviewStore = create<ReviewStore>((set) => ({
-  mode: 'analyze',
+  mode: 'pr',
   setMode: (m) => set({ mode: m }),
   findingFilter: 'all',
   setFindingFilter: (f) => set({ findingFilter: f }),

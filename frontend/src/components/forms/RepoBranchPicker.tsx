@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, ChevronDown, ChevronRight, FileCode, Folder, FolderOpen, Loader2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Folder, FolderOpen, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,15 +37,13 @@ function buildDirTree(files: RepoTreeFile[]): TreeDir {
 interface DirNodeProps {
   node: TreeDir;
   depth: number;
-  mode: 'file' | 'directory';
   selectedPath: string | null;
-  onSelectFile: (path: string) => void;
   onSelectDir: (path: string) => void;
 }
 
-function DirNode({ node, depth, mode, selectedPath, onSelectFile, onSelectDir }: DirNodeProps) {
+function DirNode({ node, depth, selectedPath, onSelectDir }: DirNodeProps) {
   const [open, setOpen] = useState(depth < 1);
-  const isSelected = mode === 'directory' && selectedPath === node.path;
+  const isSelected = selectedPath === node.path;
 
   return (
     <div>
@@ -64,7 +62,7 @@ function DirNode({ node, depth, mode, selectedPath, onSelectFile, onSelectDir }:
         </button>
         <button
           type="button"
-          onClick={mode === 'directory' ? () => onSelectDir(node.path) : () => setOpen((o) => !o)}
+          onClick={() => onSelectDir(node.path)}
           className="flex items-center gap-1.5 flex-1 text-left truncate"
         >
           {open ? (
@@ -82,27 +80,10 @@ function DirNode({ node, depth, mode, selectedPath, onSelectFile, onSelectDir }:
               key={child.path}
               node={child}
               depth={depth + 1}
-              mode={mode}
               selectedPath={selectedPath}
-              onSelectFile={onSelectFile}
               onSelectDir={onSelectDir}
             />
           ))}
-          {mode === 'file' &&
-            node.files.map((f) => (
-              <button
-                key={f.path}
-                type="button"
-                onClick={() => onSelectFile(f.path)}
-                className={`flex w-full items-center gap-1.5 px-2 py-1 rounded text-sm text-left transition-colors ${
-                  selectedPath === f.path ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted'
-                }`}
-                style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}
-              >
-                <FileCode className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-                <span className="truncate">{f.path.split('/').pop()}</span>
-              </button>
-            ))}
         </div>
       )}
     </div>
@@ -110,11 +91,10 @@ function DirNode({ node, depth, mode, selectedPath, onSelectFile, onSelectDir }:
 }
 
 interface RepoBranchPickerProps {
-  mode: 'file' | 'directory';
   onChange: (url: string | null) => void;
 }
 
-export default function RepoBranchPicker({ mode, onChange }: RepoBranchPickerProps) {
+export default function RepoBranchPicker({ onChange }: RepoBranchPickerProps) {
   const [repoInput, setRepoInput] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -136,10 +116,8 @@ export default function RepoBranchPicker({ mode, onChange }: RepoBranchPickerPro
       const res = await fetchRepoTree(owner, repo, br);
       setFiles(res.files);
       setTruncated(res.truncated);
-      if (mode === 'directory') {
-        setSelectedPath('');
-        onChange(`https://github.com/${owner}/${repo}/tree/${br}`);
-      }
+      setSelectedPath('');
+      onChange(`https://github.com/${owner}/${repo}/tree/${br}`);
     } catch (err) {
       setTreeError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -171,12 +149,6 @@ export default function RepoBranchPicker({ mode, onChange }: RepoBranchPickerPro
   const handleBranchChange = (br: string) => {
     setBranch(br);
     if (repoInfo) void loadTree(repoInfo.owner, repoInfo.repo, br);
-  };
-
-  const handleSelectFile = (path: string) => {
-    if (!repoInfo) return;
-    setSelectedPath(path);
-    onChange(`https://github.com/${repoInfo.owner}/${repoInfo.repo}/blob/${branch}/${path}`);
   };
 
   const handleSelectDir = (path: string) => {
@@ -265,55 +237,32 @@ export default function RepoBranchPicker({ mode, onChange }: RepoBranchPickerPro
       {tree && !treeLoading && !isEmpty && (
         <div className="space-y-1.5">
           <Label className="text-foreground/80 font-medium tracking-wide text-sm">
-            {mode === 'file' ? 'Select a file' : 'Select a folder (or use the whole repository)'}
+            Select a folder (or use the whole repository)
           </Label>
           <div className="max-h-64 overflow-y-auto rounded-md border border-border/50 bg-background/30 py-1.5">
-            {mode === 'directory' && (
-              <button
-                type="button"
-                onClick={() => handleSelectDir('')}
-                className={`flex w-full items-center gap-1.5 px-2 py-1 text-sm text-left ${
-                  selectedPath === '' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted'
-                }`}
-              >
-                <FolderOpen className="h-3.5 w-3.5 shrink-0 text-yellow-500" />
-                Entire repository
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => handleSelectDir('')}
+              className={`flex w-full items-center gap-1.5 px-2 py-1 text-sm text-left ${
+                selectedPath === '' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted'
+              }`}
+            >
+              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-yellow-500" />
+              Entire repository
+            </button>
             {[...tree.dirs.values()].map((child) => (
               <DirNode
                 key={child.path}
                 node={child}
                 depth={0}
-                mode={mode}
                 selectedPath={selectedPath}
-                onSelectFile={handleSelectFile}
                 onSelectDir={handleSelectDir}
               />
             ))}
-            {mode === 'file' &&
-              tree.files.map((f) => (
-                <button
-                  key={f.path}
-                  type="button"
-                  onClick={() => handleSelectFile(f.path)}
-                  className={`flex w-full items-center gap-1.5 px-2 py-1 text-sm text-left ${
-                    selectedPath === f.path ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted'
-                  }`}
-                >
-                  <FileCode className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-                  {f.path}
-                </button>
-              ))}
           </div>
           {truncated && (
             <p className="text-xs text-muted-foreground">
               This repository has a lot of files — the list was truncated.
-            </p>
-          )}
-          {mode === 'file' && selectedPath && (
-            <p className="text-xs text-muted-foreground">
-              Selected: <span className="font-mono">{selectedPath}</span>
             </p>
           )}
         </div>

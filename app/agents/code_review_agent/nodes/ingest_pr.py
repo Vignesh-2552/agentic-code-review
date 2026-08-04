@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 from loguru import logger
 
 from app.models.types import PRReviewState
+from app.utils.node_result_writer import make_run_id, write_node_result_md
 
 
 def parse_git_diff(git_diff: str) -> List[Dict[str, Any]]:
@@ -57,8 +58,17 @@ class IngestPRNode:
         changed_files = parse_git_diff(git_diff)
         logger.info(f"Parsed {len(changed_files)} changed files from diff")
 
+        run_id = make_run_id(pr_title)
+        write_node_result_md(
+            run_id,
+            "ingest_pr",
+            "Ingest PR",
+            {"pr_title": pr_title, "changed_files": changed_files},
+        )
+
         return {
             "changed_files": changed_files,
+            "run_id": run_id,
             # Initialize parallel output fields so operator.add has a base to extend
             "architecture_issues": [],
             "security_vulnerabilities": [],

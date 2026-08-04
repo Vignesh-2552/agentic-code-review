@@ -3,35 +3,6 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, validator
 
 
-class CodeReviewRequest(BaseModel):
-    """Request model for code review."""
-    github_url: str = Field(..., description="GitHub file URL to analyze (blob, raw, or any GitHub URL)")
-    context: Optional[str] = Field(None, description="Additional context about the code")
-
-    @validator('github_url')
-    def validate_github_url(cls, v):
-        if not v.startswith('http'):
-            raise ValueError('github_url must be a valid HTTP/HTTPS URL')
-        return v
-
-
-class CodeReviewResponse(BaseModel):
-    """Response model for code review results."""
-    severity_level: str
-    requires_human_review: bool
-    analysis_complete: bool
-    processing_time_seconds: float
-    syntax_issues: List[Dict[str, Any]]
-    security_vulnerabilities: List[Dict[str, Any]]
-    performance_issues: List[Dict[str, Any]]
-    style_violations: List[Dict[str, Any]]
-    best_practice_violations: List[Dict[str, Any]]
-    explanations: List[Dict[str, Any]]
-    improvement_suggestions: List[Dict[str, Any]]
-    learning_resources: List[str]
-    summary: Dict[str, Any]
-
-
 class PRReviewRequest(BaseModel):
     """Request model for PR review."""
     git_diff: str = Field(..., description="The unified git diff of the PR", min_length=1, max_length=500000)

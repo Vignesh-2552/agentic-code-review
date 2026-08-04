@@ -6,6 +6,7 @@ from app.models.types import PRReviewState
 from app.models.schemas import PRSummaryResult
 from app.core.llm_service import LLMService
 from app.core.prompt_service import PromptService
+from app.utils.node_result_writer import write_node_result_md
 
 _SEVERITY_ORDER = ["critical", "high", "medium", "low"]
 
@@ -16,6 +17,12 @@ class HumanEscalationNode:
     async def __call__(self, state: PRReviewState) -> dict:
         logger.warning(
             f"Critical severity detected — flagging for human review: {state.get('pr_title')}"
+        )
+        write_node_result_md(
+            state.get("run_id", "unknown-run"),
+            "human_escalation",
+            "Human Escalation",
+            {"requires_human_review": True, "pr_title": state.get("pr_title", "")},
         )
         return {
             "requires_human_review": True,
@@ -62,6 +69,12 @@ class GeneratePRSummaryNode:
             )
             structured_result: PRSummaryResult = await self._structured_model.ainvoke(prompt_str)
             result = structured_result.model_dump()
+            write_node_result_md(
+                state.get("run_id", "unknown-run"),
+                "generate_pr_summary",
+                "PR Summary",
+                result,
+            )
 
             logger.info(
                 f"PR summary generated with approval_status: {result.get('approval_status')}"

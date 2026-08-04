@@ -103,14 +103,7 @@ export default function DirectoryReviewPage() {
         onToggle={toggle}
       >
         <form onSubmit={handleSubmit} className="space-y-3">
-          <RepoBranchPicker mode="directory" onChange={(url) => setGithubUrl(url ?? '')} />
-          <p className="text-[11px] text-muted-foreground">
-            For reviewing a single file instead, use{' '}
-            <a href="/analyze" className="underline underline-offset-2 hover:text-foreground">
-              Single File
-            </a>
-            .
-          </p>
+          <RepoBranchPicker onChange={(url) => setGithubUrl(url ?? '')} />
           <div className="space-y-1.5">
             <Label htmlFor="context" className="text-xs font-medium text-muted-foreground">
               Context (optional)

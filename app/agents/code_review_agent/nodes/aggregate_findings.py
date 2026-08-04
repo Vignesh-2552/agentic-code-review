@@ -1,6 +1,7 @@
 from loguru import logger
 
 from app.models.types import PRReviewState
+from app.utils.node_result_writer import write_node_result_md
 
 _SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 _RANK_TO_SEVERITY = {4: "critical", 3: "high", 2: "medium", 1: "low", 0: "low"}
@@ -48,6 +49,13 @@ class AggregateFindingsNode:
         logger.info(
             f"Aggregated {len(deduplicated)} unique findings "
             f"(from {len(all_raw)} raw), severity: {severity_level}"
+        )
+
+        write_node_result_md(
+            state.get("run_id", "unknown-run"),
+            "aggregate_findings",
+            "Aggregate Findings",
+            {"all_findings": deduplicated, "severity_level": severity_level},
         )
 
         return {

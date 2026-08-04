@@ -3,6 +3,7 @@ from typing import Any, Dict
 from loguru import logger
 
 from app.models.types import PRReviewState
+from app.utils.node_result_writer import write_node_result_md
 
 
 def _format_related_files_context(project_context: Dict[str, Any]) -> str:
@@ -50,6 +51,13 @@ class BuildProjectContextNode:
 
         logger.debug(
             f"Project context built with {len(project_context['related_files'])} related files"
+        )
+
+        write_node_result_md(
+            state.get("run_id", "unknown-run"),
+            "build_project_context",
+            "Build Project Context",
+            project_context,
         )
 
         return {"project_context": project_context}

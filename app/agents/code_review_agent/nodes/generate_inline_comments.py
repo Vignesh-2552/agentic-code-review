@@ -6,6 +6,7 @@ from app.core.llm_service import LLMService
 from app.core.prompt_service import PromptService
 from app.models.schemas import InlineCommentsResult
 from app.models.types import PRReviewState
+from app.utils.node_result_writer import write_node_result_md
 
 
 class GenerateInlineCommentsNode:
@@ -23,6 +24,12 @@ class GenerateInlineCommentsNode:
                 all_findings=json.dumps(all_findings, indent=2),
             )
             result: InlineCommentsResult = await self._structured_model.ainvoke(prompt_str)
+            write_node_result_md(
+                state.get("run_id", "unknown-run"),
+                "generate_inline_comments",
+                "Inline Comments",
+                result.model_dump(),
+            )
 
             comments = [comment.model_dump() for comment in result.inline_comments]
             logger.info(f"Generated {len(comments)} inline comments")

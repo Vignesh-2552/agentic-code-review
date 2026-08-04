@@ -99,7 +99,6 @@ export default function PRReviewPage() {
         onToggle={toggle}
       >
         <ReviewInputForm
-          mode="pr"
           mutation={{ mutate, isPending, error }}
           hideLoadingState
           compact

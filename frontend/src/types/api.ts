@@ -1,8 +1,3 @@
-export interface CodeReviewRequest {
-  github_url: string;
-  context?: string;
-}
-
 export interface PRReviewRequest {
   git_diff: string;
   pr_title: string;
@@ -51,17 +46,6 @@ export interface CompleteEvent<T = Omit<PRReviewResponse, 'processing_time_secon
   result: T;
 }
 
-export interface StreamAnalyzeResult {
-  severity_level: string;
-  requires_human_review: boolean;
-  analysis_complete: boolean;
-  security_vulnerabilities: FindingItem[];
-  performance_issues: FindingItem[];
-  best_practice_violations: FindingItem[];
-  summary: CodeReviewSummary;
-}
-
-export type AnalyzeSSEEvent = NodeCompleteEvent | CompleteEvent<StreamAnalyzeResult> | StreamErrorEvent;
 export type DirectorySSEEvent = NodeCompleteEvent | CompleteEvent<Omit<DirectoryReviewResponse, 'processing_time_seconds'>> | StreamErrorEvent;
 
 export interface StreamErrorEvent {
@@ -78,32 +62,6 @@ export interface FindingItem {
   line?: number;
   file?: string;
   [key: string]: unknown;
-}
-
-export interface CodeReviewSummary {
-  total_issues: number;
-  security_vulnerabilities: number;
-  performance_issues: number;
-  best_practice_violations: number;
-  architecture_issues: number;
-  github_url: string;
-  language: string;
-}
-
-export interface CodeReviewResponse {
-  severity_level: string;
-  requires_human_review: boolean;
-  analysis_complete: boolean;
-  processing_time_seconds: number;
-  security_vulnerabilities: FindingItem[];
-  performance_issues: FindingItem[];
-  best_practice_violations: FindingItem[];
-  syntax_issues: FindingItem[];
-  style_violations: FindingItem[];
-  explanations: FindingItem[];
-  improvement_suggestions: FindingItem[];
-  learning_resources: string[];
-  summary: CodeReviewSummary;
 }
 
 export interface InlineComment {

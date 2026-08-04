@@ -13,6 +13,7 @@ class PRReviewState(TypedDict):
     repository_context: NotRequired[Dict[str, Any]]
     # After ingest_pr
     changed_files: NotRequired[List[Dict[str, Any]]]
+    run_id: NotRequired[str]
     # After build_project_context
     project_context: NotRequired[Dict[str, Any]]
     # Parallel analysis outputs (operator.add merges partial dicts from all 4 nodes)

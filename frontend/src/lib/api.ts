@@ -2,8 +2,6 @@
 
 import { useCallback, useRef, useState } from 'react';
 import type {
-  AnalyzeSSEEvent,
-  CodeReviewRequest,
   DirectoryReviewRequest,
   DirectoryReviewResponse,
   DirectorySSEEvent,
@@ -15,7 +13,6 @@ import type {
   PRReviewRequest,
   PRReviewResponse,
   SSEEvent,
-  StreamAnalyzeResult,
 } from '@/types/api';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
@@ -251,14 +248,6 @@ function useStreamReview<
     partialFindings,
     totalElapsedMs,
   };
-}
-
-export function useStreamAnalyzeCode() {
-  return useStreamReview<
-    CodeReviewRequest,
-    StreamAnalyzeResult,
-    AnalyzeSSEEvent
-  >('/api/v1/review/analyze/stream');
 }
 
 export function useStreamPRReview() {

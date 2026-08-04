@@ -13,7 +13,6 @@ interface Props {
 }
 
 const navItems = [
-  { href: '/analyze', label: 'Single File' },
   { href: '/pr', label: 'Pull Request' },
   { href: '/directory', label: 'Directory' },
 ];
@@ -28,7 +27,7 @@ export default function DashboardLayout({ children }: Props) {
         <div className="mx-auto flex h-12 max-w-[1400px] items-center justify-between gap-4 px-4">
           <div className="flex items-center gap-5 min-w-0">
             <Link
-              href="/analyze"
+              href="/pr"
               className="flex items-center gap-2 shrink-0 font-semibold tracking-tight"
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/15 text-primary">
