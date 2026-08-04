@@ -1,13 +1,14 @@
 from langchain_openai import ChatOpenAI
 from loguru import logger
 
+from app.config.settings import settings
+
 _OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 class LLMService:
     def __init__(self):
         logger.info("Initializing LLM Service")
-        from app.config.settings import settings
 
         use_openrouter = bool(settings.OPENROUTER_API_KEY)
 

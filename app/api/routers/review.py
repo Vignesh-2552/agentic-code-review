@@ -8,7 +8,6 @@ from fastapi.responses import StreamingResponse
 from loguru import logger
 
 from app.api.dependencies import get_code_review_service
-from app.config.settings import settings
 from app.models.schemas import (
     DirectoryReviewRequest,
     DirectoryReviewResponse,
@@ -18,9 +17,30 @@ from app.models.schemas import (
 )
 from app.models.types import PRReviewState
 from app.services.code_review_service import CodeReviewService
-from app.utils.github_directory_fetcher import build_synthetic_diff, fetch_directory_files
 
 router = APIRouter()
+
+
+def _count_valid(items: list[dict] | None) -> int:
+    return len([x for x in (items or []) if not x.get("error")])
+
+
+def _build_findings_count(result: dict) -> dict:
+    return {
+        "total": _count_valid(result.get("all_findings")),
+        "architecture": _count_valid(result.get("architecture_issues")),
+        "security": _count_valid(result.get("security_vulnerabilities")),
+        "performance": _count_valid(result.get("performance_issues")),
+        "best_practices": _count_valid(result.get("best_practice_violations")),
+    }
+
+
+def _group_comments_by_file(inline_comments: list[dict]) -> dict[str, list[dict]]:
+    comments_by_file: dict[str, list[dict]] = {}
+    for comment in inline_comments:
+        fp = comment.get("file_path", "unknown")
+        comments_by_file.setdefault(fp, []).append(comment)
+    return comments_by_file
 
 
 @router.post("/pr", response_model=PRReviewResponse)
@@ -46,16 +66,7 @@ async def review_pr(
         result = await review_service.analyze_code(state)
         processing_time = (datetime.now() - start_time).total_seconds()
 
-        def count_valid(lst):
-            return len([x for x in (lst or []) if not x.get("error")])
-
-        findings_count = {
-            "total": count_valid(result.get("all_findings")),
-            "architecture": count_valid(result.get("architecture_issues")),
-            "security": count_valid(result.get("security_vulnerabilities")),
-            "performance": count_valid(result.get("performance_issues")),
-            "best_practices": count_valid(result.get("best_practice_violations")),
-        }
+        findings_count = _build_findings_count(result)
 
         return PRReviewResponse(
             requires_human_review=result.get("requires_human_review", False),
@@ -177,16 +188,7 @@ async def _pr_stream_generator(
             yield item  # SSE string chunk
 
     if final_state:
-        def count_valid(lst):
-            return len([x for x in (lst or []) if not x.get("error")])
-
-        findings_count = {
-            "total": count_valid(final_state.get("all_findings")),
-            "architecture": count_valid(final_state.get("architecture_issues")),
-            "security": count_valid(final_state.get("security_vulnerabilities")),
-            "performance": count_valid(final_state.get("performance_issues")),
-            "best_practices": count_valid(final_state.get("best_practice_violations")),
-        }
+        findings_count = _build_findings_count(final_state)
 
         complete_chunk = {
             "type": "complete",
@@ -207,30 +209,15 @@ async def _directory_stream_generator(
     review_service: CodeReviewService,
 ) -> AsyncGenerator[str, None]:
     try:
-        try:
-            files = fetch_directory_files(request.github_url, token=settings.GITHUB_TOKEN)
-        except ValueError as fetch_err:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(fetch_err)})}\n\n"
-            return
-        except Exception as exc:
-            yield f"data: {json.dumps({'type': 'error', 'message': f'Could not fetch directory from GitHub: {exc}'})}\n\n"
-            return
-
-        synthetic_diff = build_synthetic_diff(files)
-        file_paths = [f["path"] for f in files]
-
-        state: PRReviewState = {
-            "git_diff": synthetic_diff,
-            "pr_title": f"Directory review: {request.github_url}",
-            "pr_description": request.context,
-            "commit_messages": [],
-            "repository_context": {"files_in_scope": file_paths},
-        }
-
-    except Exception as e:
-        yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        state, files = review_service.build_directory_state(request.github_url, request.context)
+    except ValueError as fetch_err:
+        yield f"data: {json.dumps({'type': 'error', 'message': str(fetch_err)})}\n\n"
+        return
+    except Exception as exc:
+        yield f"data: {json.dumps({'type': 'error', 'message': f'Could not fetch directory from GitHub: {exc}'})}\n\n"
         return
 
+    file_paths = [f["path"] for f in files]
     final_state: dict = {}
 
     async for item in _graph_stream_generator(state, review_service):
@@ -240,15 +227,8 @@ async def _directory_stream_generator(
             yield item
 
     if final_state:
-        def count_valid(lst):
-            return len([x for x in (lst or []) if not x.get("error")])
-
         inline_comments: list = final_state.get("inline_comments", [])
-
-        comments_by_file: dict[str, list] = {}
-        for comment in inline_comments:
-            fp = comment.get("file_path", "unknown")
-            comments_by_file.setdefault(fp, []).append(comment)
+        comments_by_file = _group_comments_by_file(inline_comments)
 
         file_findings = []
         for f in files:
@@ -261,13 +241,7 @@ async def _directory_stream_generator(
                 "findings_count": len(file_comments),
             })
 
-        findings_count = {
-            "total": count_valid(final_state.get("all_findings")),
-            "architecture": count_valid(final_state.get("architecture_issues")),
-            "security": count_valid(final_state.get("security_vulnerabilities")),
-            "performance": count_valid(final_state.get("performance_issues")),
-            "best_practices": count_valid(final_state.get("best_practice_violations")),
-        }
+        findings_count = _build_findings_count(final_state)
 
         complete_chunk = {
             "type": "complete",
@@ -340,36 +314,18 @@ async def review_directory(
 
     try:
         try:
-            files = fetch_directory_files(request.github_url, token=settings.GITHUB_TOKEN)
+            state, files = review_service.build_directory_state(request.github_url, request.context)
         except ValueError as fetch_err:
             raise HTTPException(status_code=400, detail=str(fetch_err))
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"Could not fetch directory from GitHub: {exc}")
 
-        synthetic_diff = build_synthetic_diff(files)
         file_paths = [f["path"] for f in files]
-
-        state: PRReviewState = {
-            "git_diff": synthetic_diff,
-            "pr_title": f"Directory review: {request.github_url}",
-            "pr_description": request.context,
-            "commit_messages": [],
-            "repository_context": {"files_in_scope": file_paths},
-        }
-
         result = await review_service.analyze_code(state)
         processing_time = (datetime.now() - start_time).total_seconds()
 
-        def count_valid(lst):
-            return len([x for x in (lst or []) if not x.get("error")])
-
         inline_comments: list = result.get("inline_comments", [])
-
-        # Group inline comments back to per-file findings
-        comments_by_file: dict[str, list] = {}
-        for comment in inline_comments:
-            fp = comment.get("file_path", "unknown")
-            comments_by_file.setdefault(fp, []).append(comment)
+        comments_by_file = _group_comments_by_file(inline_comments)
 
         file_findings = []
         for f in files:
@@ -382,13 +338,7 @@ async def review_directory(
                 findings_count=len(file_comments),
             ))
 
-        findings_count = {
-            "total": count_valid(result.get("all_findings")),
-            "architecture": count_valid(result.get("architecture_issues")),
-            "security": count_valid(result.get("security_vulnerabilities")),
-            "performance": count_valid(result.get("performance_issues")),
-            "best_practices": count_valid(result.get("best_practice_violations")),
-        }
+        findings_count = _build_findings_count(result)
 
         return DirectoryReviewResponse(
             requires_human_review=result.get("requires_human_review", False),
